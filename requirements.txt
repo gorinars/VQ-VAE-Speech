@@ -11,3 +11,5 @@ pyyaml
 tqdm
 seaborn
 textgrid
+librosa
+umap

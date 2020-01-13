@@ -31,7 +31,7 @@ from experiments.evaluator import Evaluator
 from models.convolutional_vq_vae import ConvolutionalVQVAE
 from error_handling.console_logger import ConsoleLogger
 from dataset.vctk_features_stream import VCTKFeaturesStream
-from dataset.ibm_features_stream import IBMFeaturesStream
+from dataset.voxceleb2_features_stream import Voxceleb2FeaturesStream
 
 from torch import nn
 import torch.optim as optim
@@ -45,7 +45,7 @@ class PipelineFactory(object):
     @staticmethod
     def build(configuration, device_configuration, experiments_path, experiment_name, results_path):
         # data_stream = VCTKFeaturesStream('../data/vctk', configuration, device_configuration.gpu_ids, device_configuration.use_cuda)
-        data_stream = IBMFeaturesStream('../data/ibm', configuration, device_configuration.gpu_ids, device_configuration.use_cuda)
+        data_stream = Voxceleb2FeaturesStream('../data/voxceleb2', configuration, device_configuration.gpu_ids, device_configuration.use_cuda)
 
         if configuration['decoder_type'] == 'deconvolutional':
             vqvae_model = ConvolutionalVQVAE(configuration, device_configuration.device).to(device_configuration.device)
@@ -113,7 +113,7 @@ class PipelineFactory(object):
             # Load the data stream
             ConsoleLogger.status('Loading the data stream')
             # data_stream = VCTKFeaturesStream(data_path + os.sep + 'vctk', configuration, device_configuration.gpu_ids, device_configuration.use_cuda)
-            data_stream = IBMFeaturesStream(data_path + os.sep + 'ibm', configuration, device_configuration.gpu_ids, device_configuration.use_cuda)
+            data_stream = Voxceleb2FeaturesStream(data_path + os.sep + 'voxceleb2', configuration, device_configuration.gpu_ids, device_configuration.use_cuda)
 
             def load_state_dicts(model, checkpoint, model_name, optimizer_name):
                 # Load the state dict from the checkpoint to the model

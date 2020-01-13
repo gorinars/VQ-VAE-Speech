@@ -27,8 +27,8 @@
 from error_handling.console_logger import ConsoleLogger
 from dataset.vctk_speech_stream import VCTKSpeechStream
 from dataset.vctk_features_stream import VCTKFeaturesStream
-from dataset.ibm_speech_stream import IBMSpeechStream
-from dataset.ibm_features_stream import IBMFeaturesStream
+from dataset.voxceleb2_speech_stream import Voxceleb2SpeechStream
+from dataset.voxceleb2_features_stream import Voxceleb2FeaturesStream
 from experiments.pipeline_factory import PipelineFactory
 from experiments.device_configuration import DeviceConfiguration
 from experiments.experiments import Experiments
@@ -63,9 +63,9 @@ if __name__ == "__main__":
     default_experiments_configuration_path = '..' + os.sep + 'configurations' + os.sep + 'experiments_vq44-mfcc39.json'
     default_experiments_path = '..' + os.sep + 'experiments'
     # default_configuration_path = '..' + os.sep + 'configurations' + os.sep + 'vctk_features.yaml'
-    default_configuration_path = '..' + os.sep + 'configurations' + os.sep + 'ibm_features.yaml'
+    default_configuration_path = '..' + os.sep + 'configurations' + os.sep + 'voxceleb2_features.yaml'
     # default_dataset_path = '..' + os.sep + 'data' + os.sep + 'vctk'
-    default_dataset_path = '..' + os.sep + 'data' + os.sep + 'ibm'
+    default_dataset_path = '..' + os.sep + 'data' + os.sep + 'voxceleb2'
     default_results_path = '..' + os.sep + 'results'
     default_experiment_name = 'baseline'
 
@@ -127,10 +127,10 @@ if __name__ == "__main__":
         configuration = load_configuration(default_configuration_path)
         configuration = update_configuration_from_experiments(args.experiments_configuration_path, configuration)
         device_configuration = DeviceConfiguration.load_from_configuration(configuration)
-        data_stream = IBMSpeechStream(configuration, device_configuration.gpu_ids, device_configuration.use_cuda)
+        data_stream = Voxceleb2SpeechStream(configuration, device_configuration.gpu_ids, device_configuration.use_cuda)
         # data_stream = VCTKSpeechStream(configuration, device_configuration.gpu_ids, device_configuration.use_cuda)
         data_stream.export_to_features(default_dataset_path, configuration)
-        ConsoleLogger.success("IBM exported to a new features dataset at: '{}'".format(
+        ConsoleLogger.success("Voxceleb2 exported to a new features dataset at: '{}'".format(
             default_dataset_path + os.sep + configuration['features_path']))
         # ConsoleLogger.success("VCTK exported to a new features dataset at: '{}'".format(
         #     default_dataset_path + os.sep + configuration['features_path']))
@@ -145,7 +145,7 @@ if __name__ == "__main__":
         configuration = load_configuration(default_configuration_path)
         configuration = update_configuration_from_experiments(args.experiments_configuration_path, configuration)
         device_configuration = DeviceConfiguration.load_from_configuration(configuration)
-        data_stream = IBMFeaturesStream(default_dataset_path, configuration, device_configuration.gpu_ids, device_configuration.use_cuda)
+        data_stream = Voxceleb2FeaturesStream(default_dataset_path, configuration, device_configuration.gpu_ids, device_configuration.use_cuda)
         # data_stream = VCTKFeaturesStream(default_dataset_path, configuration, device_configuration.gpu_ids, device_configuration.use_cuda)
         data_stream.compute_dataset_stats()
         sys.exit(0)
