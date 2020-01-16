@@ -38,7 +38,7 @@ import torch.nn.functional as F
 
 class DeconvolutionalDecoder(nn.Module):
     
-    def __init__(self, in_channels, out_channels, num_hiddens, num_residual_layers,
+    def __init__(self, in_channels, out_channels, output_type, num_hiddens, num_residual_layers,
         num_residual_hiddens, use_kaiming_normal, use_jitter, jitter_probability,
         use_speaker_conditioning, device, verbose=False):
 
@@ -48,6 +48,7 @@ class DeconvolutionalDecoder(nn.Module):
         self._use_speaker_conditioning = use_speaker_conditioning
         self._device = device
         self._verbose = verbose
+        self._output_type = output_type
 
         if self._use_jitter:
             self._jitter = Jitter(jitter_probability)
@@ -63,7 +64,18 @@ class DeconvolutionalDecoder(nn.Module):
             use_kaiming_normal=use_kaiming_normal
         )
 
-        self._upsample = nn.Upsample(scale_factor=2)
+        if self._output_type == 'log_filterbank':
+            self._upsample = nn.Upsample(scale_factor=2)
+        elif self._output_type == 'audio':
+            self._upsample_1 = nn.Upsample(scale_factor=4)
+            self._upsample_2 = nn.Upsample(scale_factor=2)
+            self._upsample_3 = nn.Upsample(scale_factor=4)
+            self._upsample_4 = nn.Upsample(scale_factor=2)
+            self._upsample_5 = nn.Upsample(scale_factor=5)
+        else:
+            raise ('Not Implemented')
+
+        # self._linear = nn.Linear(18432, 7691)
 
         self._residual_stack = ResidualStack(
             in_channels=num_hiddens,
@@ -97,7 +109,7 @@ class DeconvolutionalDecoder(nn.Module):
             use_kaiming_normal=use_kaiming_normal
         )
 
-    def forward(self, inputs, speaker_dic, speaker_id):
+    def forward(self, inputs, speaker_dic, speaker_id, softmax=False):
         x = inputs
         if self._verbose:
             ConsoleLogger.status('[FEATURES_DEC] input size: {}'.format(x.size()))
@@ -108,30 +120,79 @@ class DeconvolutionalDecoder(nn.Module):
         if self._use_speaker_conditioning:
             speaker_embedding = GlobalConditioning.compute(speaker_dic, speaker_id, x,
                 device=self._device, gin_channels=40, expand=True)
+            # print (speaker_embedding.shape)
+
             x = torch.cat([x, speaker_embedding], dim=1).to(self._device)
+
+            # print (x.shape)
 
         x = self._conv_1(x)
         if self._verbose:
             ConsoleLogger.status('[FEATURES_DEC] _conv_1 output size: {}'.format(x.size()))
 
-        x = self._upsample(x)
-        if self._verbose:
-            ConsoleLogger.status('[FEATURES_DEC] _upsample output size: {}'.format(x.size()))
-        
+        # print (x.shape)
+        # print (speaker_dic)
+        # import sys
+        # sys.exit(0)
+
+        if self._output_type == 'audio':
+            x = self._upsample_1(x)
+            if self._verbose:
+                ConsoleLogger.status('[FEATURES_DEC] _upsample output size: {}'.format(x.size()))
+
+            x = self._upsample_2(x)
+            if self._verbose:
+                ConsoleLogger.status('[FEATURES_DEC] _upsample output size: {}'.format(x.size()))
+
+        else:
+            # print (x.shape)
+            # import sys
+            # sys.exit(0)
+            x = self._upsample(x)
+            if self._verbose:
+                ConsoleLogger.status('[FEATURES_DEC] _upsample output size: {}'.format(x.size()))
+    
+        # print (x.shape)
+
         x = self._residual_stack(x)
         if self._verbose:
             ConsoleLogger.status('[FEATURES_DEC] _residual_stack output size: {}'.format(x.size()))
         
+        # print (x.shape)
+
         x = F.relu(self._conv_trans_1(x))
         if self._verbose:
             ConsoleLogger.status('[FEATURES_DEC] _conv_trans_1 output size: {}'.format(x.size()))
+
+        # print (x.shape)
+
+        if self._output_type == 'audio':
+
+            x = self._upsample_3(x)
+            if self._verbose:
+                ConsoleLogger.status('[FEATURES_DEC] _upsample output size: {}'.format(x.size()))
+
+            x = self._upsample_4(x)
+            if self._verbose:
+                ConsoleLogger.status('[FEATURES_DEC] _upsample output size: {}'.format(x.size()))
+
+        # print (x.shape)
 
         x = F.relu(self._conv_trans_2(x))
         if self._verbose:
             ConsoleLogger.status('[FEATURES_DEC] _conv_trans_2 output size: {}'.format(x.size()))
 
+        if self._output_type == 'audio':
+
+            x = self._upsample_5(x)
+            if self._verbose:
+                ConsoleLogger.status('[FEATURES_DEC] _upsample output size: {}'.format(x.size()))
+
         x = self._conv_trans_3(x)
         if self._verbose:
             ConsoleLogger.status('[FEATURES_DEC] _conv_trans_3 output size: {}'.format(x.size()))
-        
+
+        x = F.softmax(x, dim=1) if softmax else x
+
+
         return x

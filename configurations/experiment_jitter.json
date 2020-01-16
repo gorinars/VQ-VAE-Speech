@@ -1,17 +1,17 @@
 {
-    "experiments_path": "../experiments",
-    "results_path": "../results",
-    "configuration_path": "../configurations/ibm_wavenet.yaml",
+    "experiments_path": "../experiment_jitter",
+    "results_path": "../results_jitter",
+    "configuration_path": "../configurations/ibm_features.yaml",
     "seed": 1234,
     "experiments": {    
         "baseline": {
             "num_epochs": 1000, 
-            "batch_size": 4,
+            "batch_size": 64,
             "num_embeddings": 50,
             "use_device": "cuda:1",
             "normalize": true,
             "use_jitter": true,
-            "jitter_probability": 0.1
+            "use_speaker_conditioning": false 
         }
     }
 }

@@ -27,8 +27,8 @@
 from error_handling.console_logger import ConsoleLogger
 from dataset.vctk_speech_stream import VCTKSpeechStream
 from dataset.vctk_features_stream import VCTKFeaturesStream
-from dataset.voxceleb2_speech_stream import Voxceleb2SpeechStream
-from dataset.voxceleb2_features_stream import Voxceleb2FeaturesStream
+from dataset.ibm_speech_stream import IBMSpeechStream
+from dataset.ibm_features_stream import IBMFeaturesStream
 from experiments.pipeline_factory import PipelineFactory
 from experiments.device_configuration import DeviceConfiguration
 from experiments.experiments import Experiments
@@ -60,12 +60,12 @@ def update_configuration_from_experiments(experiments_configuration_path, config
 
 
 if __name__ == "__main__":
-    default_experiments_configuration_path = '..' + os.sep + 'configurations' + os.sep + 'experiment_voxceleb2-vq44-mfcc39.json'
+    default_experiments_configuration_path = '..' + os.sep + 'configurations' + os.sep + 'experiments_vq44-mfcc39.json'
     default_experiments_path = '..' + os.sep + 'experiments'
     # default_configuration_path = '..' + os.sep + 'configurations' + os.sep + 'vctk_features.yaml'
-    default_configuration_path = '..' + os.sep + 'configurations' + os.sep + 'voxceleb2_features.yaml'
+    default_configuration_path = '..' + os.sep + 'configurations' + os.sep + 'ibm_features.yaml'
     # default_dataset_path = '..' + os.sep + 'data' + os.sep + 'vctk'
-    default_dataset_path = '..' + os.sep + 'data' + os.sep + 'voxceleb2'
+    default_dataset_path = '..' + os.sep + 'data' + os.sep + 'ibm'
     default_results_path = '..' + os.sep + 'results'
     default_experiment_name = 'baseline'
 
@@ -89,11 +89,6 @@ if __name__ == "__main__":
     parser.add_argument('--plot_clustering_metrics_evolution', action='store_true', help='Compute the evolution of the clustering metrics accross different number of embedding vectors')
     parser.add_argument('--check_clustering_metrics_stability_over_seeds', action='store_true', help='Check the evolution of the clustering metrics statbility over different seed values')
     parser.add_argument('--plot_gradient_stats', action='store_true', help='Plot the gradient stats of the training')
-    parser.add_argument('--generate_sample', action='store_true', help='Generate one sample from checkpoint')
-    parser.add_argument('--sample_folder', nargs='?', type=str, help='The folder containing the evaluation sample')
-    parser.add_argument('--heatmap', action='store_true')
-    parser.add_argument('--produce_metrics', action='store_true')
-    parser.add_argument('--save_embeddings', action='store_true', help='Store the prototype embeddings')
     args = parser.parse_args()
     
     evaluation_options = {
@@ -111,26 +106,6 @@ if __name__ == "__main__":
         'plot_gradient_stats': args.plot_gradient_stats
     }
 
-    # sample_evaluate_options = {
-    #     'preprocessed_audio': preprocessed_audio,
-    #     'valid_originals': valid_originals,
-    #     'speaker_ids': speaker_ids,
-    #     'target': target,
-    #     'wav_filename': wav_filename,
-    #     'shifting_time': shifting_time,
-    #     'preprocessed_length': preprocessed_length,
-    #     'batch_size': batch_size,
-    #     'quantized': quantized,
-    #     'encodings': encodings,
-    #     'distances': distances,
-    #     'encoding_indices': encoding_indices,
-    #     'encoding_distances': encoding_distances,
-    #     'embedding_distances': embedding_distances,
-    #     'frames_vs_embedding_distances': frames_vs_embedding_distances,
-    #     'concatenated_quantized': concatenated_quantized,
-    #     'valid_reconstructions': valid_reconstructions
-    # }
-
     # If specified, print the summary of the model using the CPU device
     if args.summary:
         configuration = load_configuration(args.summary)
@@ -141,54 +116,6 @@ if __name__ == "__main__":
         print(model)
         sys.exit(0)
 
-    if args.plot_experiments_losses:
-        LossesPlotter().plot_training_losses(
-            Experiments.load(args.experiments_configuration_path).experiments,
-            args.experiments_path
-        )
-        sys.exit(0)
+    Experiments.load(args.experiments_configuration_path).evaluate(evaluation_options)
+    ConsoleLogger.success('All evaluating experiments done')
 
-    if args.export_to_features:
-        configuration = load_configuration(default_configuration_path)
-        configuration = update_configuration_from_experiments(args.experiments_configuration_path, configuration)
-        device_configuration = DeviceConfiguration.load_from_configuration(configuration)
-        data_stream = Voxceleb2SpeechStream(configuration, device_configuration.gpu_ids, device_configuration.use_cuda)
-        # data_stream = VCTKSpeechStream(configuration, device_configuration.gpu_ids, device_configuration.use_cuda)
-        data_stream.export_to_features(default_dataset_path, configuration)
-        ConsoleLogger.success("Voxceleb2 exported to a new features dataset at: '{}'".format(
-            default_dataset_path + os.sep + configuration['features_path']))
-        # ConsoleLogger.success("VCTK exported to a new features dataset at: '{}'".format(
-        #     default_dataset_path + os.sep + configuration['features_path']))
-        sys.exit(0)
-
-    if args.evaluate:
-        Experiments.load(args.experiments_configuration_path).evaluate(evaluation_options)
-        ConsoleLogger.success('All evaluating experiments done')
-        sys.exit(0)
-
-    if args.generate_sample:
-        configuration = load_configuration(default_configuration_path)
-        configuration = update_configuration_from_experiments(args.experiments_configuration_path, configuration)
-        eval_folder = args.sample_folder
-        evaluation_dict = Experiments.load(args.experiments_configuration_path).evaluate_once(evaluation_options, eval_folder, configuration, args.heatmap, args.produce_metrics)
-        sys.exit(0)
-
-    if args.save_embeddings:
-        configuration = load_configuration(default_configuration_path)
-        configuration = update_configuration_from_experiments(args.experiments_configuration_path, configuration)
-        evaluation_dict = Experiments.load(args.experiments_configuration_path).save_embedding()
-        sys.exit(0)
-
-    if args.compute_dataset_stats:
-        configuration = load_configuration(default_configuration_path)
-        configuration = update_configuration_from_experiments(args.experiments_configuration_path, configuration)
-        device_configuration = DeviceConfiguration.load_from_configuration(configuration)
-        data_stream = Voxceleb2FeaturesStream(default_dataset_path, configuration, device_configuration.gpu_ids, device_configuration.use_cuda)
-        # data_stream = VCTKFeaturesStream(default_dataset_path, configuration, device_configuration.gpu_ids, device_configuration.use_cuda)
-        data_stream.compute_dataset_stats()
-        sys.exit(0)
-    
-
-
-    Experiments.load(args.experiments_configuration_path).train()
-    ConsoleLogger.success('All training experiments done')

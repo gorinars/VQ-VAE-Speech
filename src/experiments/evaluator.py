@@ -24,13 +24,18 @@
  #   SOFTWARE.                                                                       #
  #####################################################################################
 
+import torch
 from dataset.spectrogram_parser import SpectrogramParser
-from dataset.vctk import VCTK
+# from dataset.vctk import VCTK
+from dataset.ibm import IBM
 from error_handling.console_logger import ConsoleLogger
 from evaluation.alignment_stats import AlignmentStats
 from evaluation.embedding_space_stats import EmbeddingSpaceStats
+from dataset.ibm_features_dataset import IBMFeaturesDataset
+from torch.utils.data import DataLoader
 
 import matplotlib.pyplot as plt
+import torch
 import torch.nn.functional as F
 import os
 import numpy as np
@@ -48,9 +53,11 @@ class Evaluator(object):
         self._model = model
         self._data_stream = data_stream
         self._configuration = configuration
-        self._vctk = VCTK(self._configuration['data_root'], ratio=self._configuration['train_val_split'])
+        # self._vctk = VCTK(self._configuration['data_root'], ratio=self._configuration['train_val_split'])
+        self._ibm = IBM(self._configuration['data_root'], ratio=self._configuration['train_val_split'])
         self._results_path = results_path
         self._experiment_name = experiment_name
+        self._num_embeddings = configuration['num_embeddings']
 
     def evaluate(self, evaluation_options):
         self._model.eval()
@@ -82,7 +89,7 @@ class Evaluator(object):
             evaluation_options['compute_groundtruth_average_phonemes_number']:
             alignment_stats = AlignmentStats(
                 self._data_stream,
-                self._vctk,
+                self._ibm,
                 self._configuration,
                 self._device,
                 self._model,
@@ -92,7 +99,7 @@ class Evaluator(object):
             )
         if evaluation_options['compute_alignments']:
             groundtruth_alignments_path = self._results_path + os.sep + \
-                'vctk_{}_groundtruth_alignments.pickle'.format(evaluation_options['alignment_subset'])
+                'ibm_{}_groundtruth_alignments.pickle'.format(evaluation_options['alignment_subset'])
             if not os.path.isfile(groundtruth_alignments_path):
                 alignment_stats.compute_groundtruth_alignments()
                 alignment_stats.compute_groundtruth_bigrams_matrix(wo_diag=True)
@@ -102,7 +109,7 @@ class Evaluator(object):
                 ConsoleLogger.status('Groundtruth alignments already exist')
 
             empirical_alignments_path = self._results_path + os.sep + self._experiment_name + \
-                '_vctk_{}_empirical_alignments.pickle'.format(evaluation_options['alignment_subset'])
+                '_ibm_{}_empirical_alignments.pickle'.format(evaluation_options['alignment_subset'])
             if not os.path.isfile(empirical_alignments_path):
                 alignment_stats.compute_empirical_alignments()
                 alignment_stats.compute_empirical_bigrams_matrix(wo_diag=True)
@@ -162,9 +169,90 @@ class Evaluator(object):
             'valid_reconstructions': valid_reconstructions
         }
 
+    def _get_embeddings(self):
+        return self._model.vq._embedding(torch.LongTensor(list(range(self._num_embeddings))).to(self._device)).to(self._device).detach().cpu().numpy()
+
+    def _evaluate_once_dict(self, eval_folder, configuration):
+        self._model.eval()
+
+        normalizer = None
+        if configuration['normalize']:
+            with open(configuration['normalizer_path'], 'rb') as file:
+                normalizer = pickle.load(file)
+        sample = IBMFeaturesDataset('../data/ibm', eval_folder, normalizer, features_path=configuration['features_path'])
+
+        validation_loader = DataLoader(
+            sample,
+            batch_size=1,
+            num_workers=configuration['num_workers'],
+            pin_memory=True
+        )
+
+        evaluation_dict = {}
+
+        validation_dataset = iter(validation_loader)
+        while True:
+            try:
+                data = next(validation_dataset)
+                # one_hot = data['one_hot'].to(self._device)
+                # shape = list(one_hot.shape)
+                # new_shape = tuple(shape[:3] + [8000] + [shape[4]])
+                # one_hot_padded = torch.zeros(new_shape)
+                # one_hot_padded[:,:,:,:self._configuration['length'],:] = one_hot
+                # one_hot_padded = one_hot_padded.to(self._device)
+                preprocessed_audio = data['preprocessed_audio'].to(self._device)
+                valid_originals = data['input_features'].to(self._device)
+                speaker_ids = data['speaker_id'].to(self._device)
+                target = data['output_features'].to(self._device)
+                wav_filename = data['wav_filename']
+                shifting_time = data['shifting_time'].to(self._device)
+                preprocessed_length = data['preprocessed_length'].to(self._device)
+
+                valid_originals = valid_originals.permute(0, 2, 1).contiguous().float()
+                batch_size = valid_originals.size(0)
+                target = target.permute(0, 2, 1).contiguous().float()
+                wav_filename = wav_filename[0][0]
+
+                z = self._model.encoder(valid_originals)
+                z = self._model.pre_vq_conv(z)
+                _, quantized, _, encodings, distances, encoding_indices, _, \
+                    encoding_distances, embedding_distances, frames_vs_embedding_distances, \
+                    concatenated_quantized = self._model.vq(z)
+                if 'wavenet_type' in configuration:
+                    # valid_reconstructions = self._model.decoder(one_hot_padded.squeeze(1).squeeze(-1), quantized, None, softmax=True)[0]
+                    valid_reconstructions = self._model.decoder.incremental_forward(one_hot_padded.squeeze(1).squeeze(-1)[:,:,0].unsqueeze(-1), quantized, None, softmax=True)[0]
+                else:
+                    valid_reconstructions = self._model.decoder(quantized, self._data_stream.speaker_dic, speaker_ids)[0]
+
+                evaluation_dict[wav_filename.split('/')[-1]] = {
+                    'preprocessed_audio': preprocessed_audio,
+                    'valid_originals': valid_originals,
+                    'speaker_ids': speaker_ids,
+                    'target': target,
+                    'wav_filename': wav_filename,
+                    'shifting_time': shifting_time,
+                    'preprocessed_length': preprocessed_length,
+                    'batch_size': batch_size,
+                    'quantized': quantized,
+                    'encodings': encodings,
+                    'distances': distances,
+                    'encoding_indices': encoding_indices,
+                    'encoding_distances': encoding_distances,
+                    'embedding_distances': embedding_distances,
+                    'frames_vs_embedding_distances': frames_vs_embedding_distances,
+                    'concatenated_quantized': concatenated_quantized,
+                    'valid_reconstructions': valid_reconstructions, 
+                }
+# 
+            except (OSError, StopIteration):
+                return evaluation_dict
+
+
+        
     def _compute_comparaison_plot(self, evaluation_entry):
         utterence_key = evaluation_entry['wav_filename'].split('/')[-1].replace('.wav', '')
-        utterence = self._vctk.utterences[utterence_key].replace('\n', '')
+        # print(self._ibm.utterances.keys())
+        # utterence = self._ibm.utterences[utterence_key].replace('\n', '')
         phonemes_alignment_path = os.sep.join(evaluation_entry['wav_filename'].split('/')[:-3]) \
             + os.sep + 'phonemes' + os.sep + utterence_key.split('_')[0] + os.sep \
             + utterence_key + '.TextGrid'
@@ -172,10 +260,10 @@ class Evaluator(object):
         #tg.read(phonemes_alignment_path)
         #for interval in tg.tiers[0]:
     
-        ConsoleLogger.status('Original utterence: {}'.format(utterence))
+        # ConsoleLogger.status('Original utterence: {}'.format(utterence))
 
-        if self._configuration['verbose']:
-            ConsoleLogger.status('utterence: {}'.format(utterence))
+        # if self._configuration['verbose']:
+            # ConsoleLogger.status('utterence: {}'.format(utterence))
 
         spectrogram_parser = SpectrogramParser()
         preprocessed_audio = evaluation_entry['preprocessed_audio'].detach().cpu()[0].numpy().squeeze()
@@ -320,7 +408,7 @@ class Evaluator(object):
                 speaker_id = wav_filenames[0][0].split(os.sep)[-2]
                 val_speaker_ids.add(speaker_id)
 
-                if speaker_id not in os.listdir(self._vctk.raw_folder + os.sep + 'VCTK-Corpus' + os.sep + 'phonemes'):
+                if speaker_id not in os.listdir(self._ibm.raw_folder + os.sep + 'IBM-Corpus' + os.sep + 'phonemes'):
                     # TODO: log the missing folders
                     continue
 

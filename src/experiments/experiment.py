@@ -118,5 +118,16 @@ class Experiment(object):
     def evaluate(self, evaluation_options):
         ConsoleLogger.status("Running the experiment called '{}'".format(self._name))
         ConsoleLogger.status('Begins to evaluate the model')
-        self._evaluator.evaluate(evaluation_options)
+        self._evaluator.evaluate(evaluation_options) 
         ConsoleLogger.success("Succeed to runned the experiment called '{}'".format(self._name))
+    
+    def evaluate_once(self, eval_folder, configuration):
+        ConsoleLogger.status("Running the experiment called '{}'".format(self._name))
+        ConsoleLogger.status('Begins to evaluate the model once')
+        evaluate_dict = self._evaluator._evaluate_once_dict(eval_folder, configuration) 
+        ConsoleLogger.success("Succeed to runned the experiment called '{}'".format(self._name))
+        return evaluate_dict
+    
+    def save_embeddings(self):
+        return self._evaluator._get_embeddings()
+

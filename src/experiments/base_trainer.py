@@ -46,7 +46,7 @@ class BaseTrainer(object):
         ConsoleLogger.status('start epoch: {}'.format(self._configuration['start_epoch']))
         ConsoleLogger.status('num epoch: {}'.format(self._configuration['num_epochs']))
 
-        for epoch in range(self._configuration['start_epoch'], self._configuration['num_epochs']):
+        for epoch in range(self._configuration['start_epoch'], 1000):
 
             with tqdm(self._data_stream.training_loader) as train_bar:
                 train_res_recon_error = list() # FIXME: record as a global metric
@@ -64,7 +64,8 @@ class BaseTrainer(object):
                     train_res_perplexity.append(perplexity_value)
                     iteration += 1
 
-                self.save(epoch, **{'train_res_recon_error': train_res_recon_error, 'train_res_perplexity': train_res_perplexity})
+                if epoch % 100 == 0:
+                    self.save(epoch, **{'train_res_recon_error': train_res_recon_error, 'train_res_perplexity': train_res_perplexity})
 
     def _record_codebook_stats(self, iteration, iterations, vq,
         concatenated_quantized, encoding_indices, speaker_id, epoch):
