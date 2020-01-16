@@ -98,7 +98,7 @@ class Voxceleb2Dataset(Dataset):
 
         quantized = MuLaw.encode(audio)
 
-        speaker = pathlib.Path(wav_filename).parent.name
+        speaker = pathlib.Path(wav_filename).parent.parent.name
 
         speaker_id = np.array(self._speaker_dic[speaker], dtype=np.long)
 

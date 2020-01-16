@@ -37,13 +37,13 @@ class Voxceleb2(Dataset):
     dset_path = 'voxceleb2'
 
     def make_speaker_dic(self, root):
-        speakers = [
-            str(speaker.name) for speaker in pathlib.Path(root).glob('dev/aac/*/')]
+        speakers = [str(speaker.name) for speaker in pathlib.Path(root).glob('dev/aac/*/')] + \
+                    [str(speaker.name) for speaker in pathlib.Path(root).glob('aac/*/')]
         print(speakers)
         speakers = sorted([speaker for speaker in speakers])
         speaker_dic = {speaker: i for i, speaker in enumerate(speakers)}
-        return 
-    def __init__(self, root, downsample=False, transform=None, target_transform=None, download=True, dev_mode=False, ratio=0.8):
+        return speaker_dic
+    def __init__(self, root, downsample=True, transform=None, target_transform=None, download=True, dev_mode=False, ratio=0.8):
         super(Voxceleb2, self).__init__()
 
         self.root = os.path.expanduser(root)
